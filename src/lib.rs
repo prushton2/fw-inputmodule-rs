@@ -106,7 +106,11 @@ impl Matrix {
         self.framebuffer[col][row] = brightness;
     }
 
-    pub fn save_col(&mut self, col: usize) {
+    pub fn clear_buffer(&mut self) {
+        self.framebuffer = [[0; ROWS]; COLS];
+    }
+
+    pub fn stage_col(&mut self, col: usize) {
         // StageCol: [column_index, 34 brightness bytes for that column]
         let mut params = Vec::with_capacity(1 + ROWS);
         params.push(col as u8);
@@ -114,18 +118,47 @@ impl Matrix {
         let _ = self.send_command(MatrixCommand::StageCol, &params);
     }
 
-    pub fn save_cols(&mut self) {
+    pub fn stage_cols(&mut self) {
         for col in 0..COLS {
-            self.save_col(col);
+            self.stage_col(col);
         }
-    }
-
-    pub fn clear_buffer(&mut self) {
-        self.framebuffer = [[0; ROWS]; COLS];
     }
     
     pub fn flush_buffer(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.send_command(MatrixCommand::FlushCols, &[])?;
+        Ok(())
+    }
+
+    pub fn draw_bw(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut bytes: Vec<u8> = Vec::with_capacity((ROWS * COLS).div_ceil(8));
+        let mut byte: u8 = 0;
+        let mut nbits: u32 = 0;
+
+        for y in 0..ROWS {
+            for x in 0..COLS {
+                let px = self.framebuffer[x][y]; // [col][row]
+
+                byte = (byte >> 1) | (u8::from(px >= 128) << 7);
+                nbits += 1;
+
+                if nbits == 8 {
+                    bytes.push(byte);
+                    byte = 0;
+                    nbits = 0;
+                }
+            }
+        }
+
+        if nbits > 0 {
+            bytes.push(byte >> (8 - nbits))
+        }
+
+        while bytes.len() < 39 {
+            bytes.push(0);
+        }
+
+
+        self.send_command(MatrixCommand::DrawBW, &bytes)?;
         Ok(())
     }
 }
