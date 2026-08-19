@@ -1,0 +1,15 @@
+[package]
+name = "fw-ledmatrix-wrapper"
+version = "0.1.0"
+edition = "2024"
+
+
+license = "MIT"
+repository = "https://github.com/prushton2/fw-ledmatrix-wrapper"
+
+[dependencies]
+serialport = "4.9.0"
+
+[lib]
+name = "ledmatrix"
+path = "src/lib.rs"
