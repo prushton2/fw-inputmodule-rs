@@ -1,12 +1,7 @@
-use std::time::Duration;
-
-use serialport::SerialPort;
-
-const COLS: usize = 9;
-const ROWS: usize = 34;
+pub mod led_matrix;
 
 // https://github.com/FrameworkComputer/inputmodule-rs/blob/main/commands.md
-pub enum MatrixCommand {
+pub enum InputmoduleCommand {
     Brightness,
     Pattern,
     Bootloader,
@@ -30,135 +25,30 @@ pub enum MatrixCommand {
     Version,
 }
 
-impl From<MatrixCommand> for u8 {
-    fn from(value: MatrixCommand) -> Self {
+impl From<InputmoduleCommand> for u8 {
+    fn from(value: InputmoduleCommand) -> Self {
         match value {
-            MatrixCommand::Brightness    =>  0x00,
-            MatrixCommand::Pattern       =>  0x01,
-            MatrixCommand::Bootloader    =>  0x02,
-            MatrixCommand::Sleep         =>  0x03,
-            MatrixCommand::GetSleep      =>  0x03,
-            MatrixCommand::Animate       =>  0x04,
-            MatrixCommand::GetAnimate    =>  0x04,
-            MatrixCommand::Panic         =>  0x05,
-            MatrixCommand::DrawBW        =>  0x06,
-            MatrixCommand::StageCol      =>  0x07,
-            MatrixCommand::FlushCols     =>  0x08,
-            MatrixCommand::SetText       =>  0x09,
-            MatrixCommand::StartGame     =>  0x10,
-            MatrixCommand::GameCtrl      =>  0x11,
-            MatrixCommand::GameStatus    =>  0x12,
-            MatrixCommand::SetColor      =>  0x13,
-            MatrixCommand::DisplayOn     =>  0x14,
-            MatrixCommand::InvertScreen  =>  0x15,
-            MatrixCommand::SetPxCol      =>  0x16,
-            MatrixCommand::FlushFB       =>  0x17,
-            MatrixCommand::Version       =>  0x20,
+            InputmoduleCommand::Brightness    =>  0x00,
+            InputmoduleCommand::Pattern       =>  0x01,
+            InputmoduleCommand::Bootloader    =>  0x02,
+            InputmoduleCommand::Sleep         =>  0x03,
+            InputmoduleCommand::GetSleep      =>  0x03,
+            InputmoduleCommand::Animate       =>  0x04,
+            InputmoduleCommand::GetAnimate    =>  0x04,
+            InputmoduleCommand::Panic         =>  0x05,
+            InputmoduleCommand::DrawBW        =>  0x06,
+            InputmoduleCommand::StageCol      =>  0x07,
+            InputmoduleCommand::FlushCols     =>  0x08,
+            InputmoduleCommand::SetText       =>  0x09,
+            InputmoduleCommand::StartGame     =>  0x10,
+            InputmoduleCommand::GameCtrl      =>  0x11,
+            InputmoduleCommand::GameStatus    =>  0x12,
+            InputmoduleCommand::SetColor      =>  0x13,
+            InputmoduleCommand::DisplayOn     =>  0x14,
+            InputmoduleCommand::InvertScreen  =>  0x15,
+            InputmoduleCommand::SetPxCol      =>  0x16,
+            InputmoduleCommand::FlushFB       =>  0x17,
+            InputmoduleCommand::Version       =>  0x20,
         }
-    }
-}
-
-pub fn discover() -> Vec<Matrix> {
-    let ports: Vec<serialport::SerialPortInfo> = serialport::available_ports()
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|e| {
-            match &e.port_type {
-                serialport::SerialPortType::UsbPort(port_info) => {
-                    return port_info.manufacturer == Some("Framework Computer Inc".to_owned()) && port_info.product == Some("LED Matrix Input Module".to_owned())
-                },
-                _ => false
-            }
-        })
-        .collect();
-
-    for port in &ports {
-        println!("{:?}", port);
-    }
-
-    let matrices: Vec<Matrix> = ports.iter().map(|e| Matrix::from_device_label(&e.port_name)).collect();
-    return matrices;
-}
-pub struct Matrix {
-    port: Box<dyn SerialPort>,
-    framebuffer: [[u8; ROWS]; COLS], // [col][row] -> brightness 0-255
-}
-
-impl Matrix {
-    pub fn from_device_label(device_label: &str) -> Self {
-        let port = serialport::new(device_label, 115_200)
-            .timeout(Duration::from_millis(500))
-            .open()
-            .expect("failed to open port");
-        Matrix {
-            port: port,
-            framebuffer: [[0; ROWS]; COLS]
-        }
-    }
-
-    pub fn send_command(&mut self, cmd: MatrixCommand, params: &[u8]) -> std::io::Result<()> {
-        let mut buf = vec![0x32, 0xAC, cmd.into()];
-        buf.extend_from_slice(params);
-        self.port.write_all(&buf)
-    }
-
-    pub fn write_buffer(&mut self, col: usize, row: usize, brightness: u8) {
-        self.framebuffer[col][row] = brightness;
-    }
-
-    pub fn clear_buffer(&mut self) {
-        self.framebuffer = [[0; ROWS]; COLS];
-    }
-
-    pub fn stage_col(&mut self, col: usize) {
-        // StageCol: [column_index, 34 brightness bytes for that column]
-        let mut params = Vec::with_capacity(1 + ROWS);
-        params.push(col as u8);
-        params.extend_from_slice(&self.framebuffer[col]);
-        let _ = self.send_command(MatrixCommand::StageCol, &params);
-    }
-
-    pub fn stage_cols(&mut self) {
-        for col in 0..COLS {
-            self.stage_col(col);
-        }
-    }
-    
-    pub fn flush_buffer(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.send_command(MatrixCommand::FlushCols, &[])?;
-        Ok(())
-    }
-
-    pub fn draw_bw(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut bytes: Vec<u8> = Vec::with_capacity((ROWS * COLS).div_ceil(8));
-        let mut byte: u8 = 0;
-        let mut nbits: u32 = 0;
-
-        for y in 0..ROWS {
-            for x in 0..COLS {
-                let px = self.framebuffer[x][y]; // [col][row]
-
-                byte = (byte >> 1) | (u8::from(px >= 128) << 7);
-                nbits += 1;
-
-                if nbits == 8 {
-                    bytes.push(byte);
-                    byte = 0;
-                    nbits = 0;
-                }
-            }
-        }
-
-        if nbits > 0 {
-            bytes.push(byte >> (8 - nbits))
-        }
-
-        while bytes.len() < 39 {
-            bytes.push(0);
-        }
-
-
-        self.send_command(MatrixCommand::DrawBW, &bytes)?;
-        Ok(())
     }
 }
