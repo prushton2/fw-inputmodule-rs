@@ -19,13 +19,13 @@ impl PFrameMatrix {
         self.framebuffer = [[value; ROWS]; COLS];
     }
 
-    pub fn flush_changes(&mut self) {
+    pub fn stage_changes(&mut self) {
         for i in 0..COLS {
-            self.flush_col_if_changed(i);
+            self.stage_col_if_changed(i);
         }
     }
 
-    fn flush_col_if_changed(&mut self, column: usize) {
+    fn stage_col_if_changed(&mut self, column: usize) {
         let mut col = self.display[column].clone();
         let mut changed = false;
 
