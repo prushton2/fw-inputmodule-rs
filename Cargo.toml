@@ -1,15 +1,15 @@
 [package]
-name = "fw-ledmatrix-wrapper"
+name = "fwinputmodule"
 version = "0.1.0"
 edition = "2024"
 
 
 license = "MIT"
-repository = "https://github.com/prushton2/fw-ledmatrix-wrapper"
+repository = "https://github.com/prushton2/fw-inputmodule-rs"
 
 [dependencies]
 serialport = "4.9.0"
 
 [lib]
-name = "ledmatrix"
+name = "fwinputmodule"
 path = "src/lib.rs"
