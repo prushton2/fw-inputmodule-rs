@@ -30,7 +30,7 @@ impl PFrameMatrix {
         let mut changed = false;
 
         for i in 0..ROWS {
-            if let Some(new_value) = self.framebuffer[column][i] {
+            if let Some(new_value) = self.framebuffer[column][i] && new_value != col[i]{
                 changed = true;
                 col[i] = new_value;
             }
